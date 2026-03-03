@@ -1,0 +1,118 @@
+version: 2.1
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:22.16
+
+orbs:
+  ci: bigcommerce/internal@volatile
+  security: bigcommerce/internal-security@volatile
+  test-coverage-reporter: bigcommerce/internal-test-coverage-reporter@volatile
+
+commands:
+  install-dependencies:
+    steps:
+      - restore_cache:
+          keys:
+            # Change this back to `package.json` when we remove the monorepo
+            - node-modules-cache-i1-{{ checksum "yarn.lock" }}
+
+      - run:
+          name: Enable corepack
+          command: |
+            mkdir -p /tmp/bc/bin
+            mkdir -p /tmp/bc/caches/corepack
+            mkdir -p /tmp/bc/caches/yarn
+            export COREPACK_HOME=/tmp/bc/caches/corepack
+            echo 'export PATH=/tmp/bc/bin:$PATH' >> $BASH_ENV
+            corepack enable yarn --install-directory /tmp/bc/bin
+            hash -r
+            yarn config set cache-folder /tmp/bc/caches/yarn
+
+      - run:
+          name: Installing dependencies
+          command: |
+            yarn install --immutable
+
+      - save_cache:
+          name: Saving node_modules cache
+          key: node-modules-cache-i1-{{ checksum "yarn.lock" }}
+          paths:
+            - /tmp/bc/caches
+
+jobs:
+  test:
+    executor: node
+    resource_class: medium+
+    environment:
+      MAX_WORKERS: 3 # Number of CPUs in resource_class
+    steps:
+      - ci/pre-setup
+      - install-dependencies
+      - test-coverage-reporter/install
+      - run:
+          name: "Run unit tests for core package"
+          command: |
+            yarn --cwd ./apps/storefront coverage
+      - run:
+          name: "Format coverage report"
+          command: |
+            sed -i -e 's|SF:|SF:apps/storefront/|g' ./apps/storefront/coverage/lcov.info
+      - test-coverage-reporter/store-report:
+          coverage-format: lcov
+          additional-args: ./apps/storefront/coverage/lcov.info
+      - store_test_results:
+          path: ./apps/storefront/coverage/junit.xml
+      - store_artifacts:
+          path: ./apps/storefront/coverage/lcov-report
+
+  lint:
+    executor: node
+    resource_class: medium
+    steps:
+      - ci/pre-setup
+      - install-dependencies
+      - run:
+          name: 'Run lint'
+          command: yarn run lint
+
+  build_and_push:
+    executor: node
+    resource_class: medium
+    steps:
+      - ci/pre-setup
+      - install-dependencies
+      - run:
+          name: "Build distribution files"
+          command: yarn build
+      - ci/gcloud_login
+      - run:
+          name: "Publish build files"
+          command: |
+             mv apps/storefront/dist ${CIRCLE_SHA1}
+             mv config ${CIRCLE_SHA1}
+             tar zcf ${CIRCLE_SHA1}.tar.gz ${CIRCLE_SHA1}
+             ./google-cloud-sdk/bin/gsutil cp ${CIRCLE_SHA1}.tar.gz gs://bigcommerce-common-deployment-artifact-gcs-storage/b2b-buyer-portal/${CIRCLE_SHA1}.tar.gz
+
+workflows:
+  version: 2
+
+  default:
+    jobs:
+      - test
+      - lint
+      - ci/validate-commits
+      - build_and_push:
+          context: "GCR + Artifact Bucket Access"
+      - ci/notify-success:
+          context: "GCR + Artifact Bucket Access"
+          requires:
+            - build_and_push
+            - ci/validate-commits
+            - lint
+            - test
+      - security/scan:
+          name: "Gitleaks secrets scan"
+          context: org-global
+          GITLEAKS_BLOCK: "false"

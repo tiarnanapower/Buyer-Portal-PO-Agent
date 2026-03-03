@@ -1,0 +1,167 @@
+import { ComponentProps, PropsWithChildren, Suspense, useContext, useEffect } from 'react';
+import { Provider } from 'react-redux';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, RenderOptions } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
+import { Mock } from 'vitest';
+
+import B3GlobalTip from '@/components/B3GlobalTip';
+import B3LayoutTip from '@/components/layout/B3LayoutTip';
+import { LangProvider } from '@/lib/lang';
+import { DynamicallyVariableProvider } from '@/shared/dynamicallyVariable';
+import { GlobalContext, GlobalProvider } from '@/shared/global';
+import { GlobalState } from '@/shared/global/context/config';
+import { AppStore, RootState, setupStore } from '@/store';
+import * as storeModule from '@/store';
+
+interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
+  initialGlobalContext?: Partial<GlobalState>;
+  preloadedState?: Partial<RootState>;
+  initialEntries?: ComponentProps<typeof MemoryRouter>['initialEntries'];
+  store?: AppStore;
+}
+
+function NavigationSpy({ children, spy }: PropsWithChildren<{ spy: Mock }>) {
+  const location = useLocation();
+
+  spy.mockReset();
+  spy(`${location.pathname}${location.search}`);
+
+  return <>{children}</>;
+}
+
+function MockGlobalProvider({ payload }: { payload: Partial<GlobalState> }) {
+  const { dispatch } = useContext(GlobalContext);
+
+  useEffect(() => {
+    dispatch({ type: 'common', payload });
+  }, [payload, dispatch]);
+
+  return null;
+}
+
+const getMockQueryClient = (): QueryClient =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        retryDelay: 0,
+        gcTime: Infinity,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        staleTime: 0,
+        refetchInterval: false,
+      },
+    },
+  });
+
+export const renderWithProviders = (
+  ui: React.ReactElement,
+  extendedRenderOptions: Partial<ExtendedRenderOptions> = {},
+) => {
+  const {
+    preloadedState = {},
+    initialGlobalContext = {},
+    initialEntries,
+    store = setupStore(preloadedState),
+    ...renderOptions
+  } = extendedRenderOptions;
+
+  vi.spyOn(storeModule, 'store', 'get').mockReturnValue(store);
+
+  const queryClient = getMockQueryClient();
+
+  const navigation = vi.fn();
+
+  function Wrapper({ children }: PropsWithChildren) {
+    return (
+      <Suspense fallback="test-loading">
+        <QueryClientProvider client={queryClient}>
+          <GlobalProvider>
+            <MemoryRouter initialEntries={initialEntries}>
+              <MockGlobalProvider payload={initialGlobalContext} />
+              <Provider store={store}>
+                <LangProvider>
+                  <DynamicallyVariableProvider>
+                    <B3LayoutTip />
+                    <B3GlobalTip />
+
+                    <NavigationSpy spy={navigation}>{children}</NavigationSpy>
+                  </DynamicallyVariableProvider>
+                </LangProvider>
+              </Provider>
+            </MemoryRouter>
+          </GlobalProvider>
+        </QueryClientProvider>
+      </Suspense>
+    );
+  }
+
+  return {
+    user: userEvent.setup(),
+    store,
+    navigation,
+    result: render(ui, { wrapper: Wrapper, ...renderOptions }),
+  };
+};
+
+export function stringContainingAll(...substrings: string[]) {
+  return {
+    asymmetricMatch(received: unknown) {
+      return substrings.every((sub) => {
+        if (typeof received === 'string') {
+          return received.includes(sub);
+        }
+
+        return false;
+      });
+    },
+    toString() {
+      return 'stringContainingAll';
+    },
+    getExpectedType() {
+      return 'string';
+    },
+  };
+}
+
+interface ProductData {
+  productId: string;
+  quantity: string;
+  sku: string;
+  options: Record<string, string>;
+}
+
+export function FakeProductDataProvider({ productId, quantity, sku, options }: ProductData) {
+  return (
+    <div className="productView">
+      <span data-product-sku>{sku}</span>
+      <form data-cart-item-add>
+        <input type="hidden" name="product_id" defaultValue={productId} />
+        {Object.entries(options).map(([key, value]) => (
+          <input key={key} name={key} defaultValue={value} />
+        ))}
+        <div id="add-to-cart-wrapper">
+          <input type="hidden" name="qty[]" defaultValue={quantity} />
+          <div className="add-to-cart-buttons">
+            <input id="form-action-addToCart" type="submit" defaultValue="Add to Cart" />
+          </div>
+        </div>
+      </form>
+      <a href="#bar">Shopping List Click Node</a>
+    </div>
+  );
+}
+
+export { startMockServer } from './mockServer';
+export { graphql, http, HttpResponse, delay } from 'msw';
+export { assertQueryParams } from './assertQueryParams';
+export * from '@testing-library/react';
+export { default as userEvent } from '@testing-library/user-event';
+
+export { builder, bulk } from 'tests/builder';
+export * from 'tests/storeStateBuilders';
+export * from 'tests/quoteBuilders';
+export { faker } from '@faker-js/faker';
+export { getUnixTime } from 'date-fns';

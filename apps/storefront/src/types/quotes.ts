@@ -1,0 +1,157 @@
+import { ExtraFieldsConfigType, Maybe, QuoteExtraFieldsConfigType } from '@/types/gql/graphql';
+
+import { Product } from './products';
+
+export interface ContactInfo {
+  name: string;
+  email: string;
+  companyName: string;
+  phoneNumber: string;
+  quoteTitle?: string;
+}
+
+export interface BillingAddress {
+  address: string;
+  addressId: number;
+  apartment: string;
+  city: string;
+  companyName: string;
+  country: string;
+  firstName: string;
+  label: string;
+  lastName: string;
+  phoneNumber: string;
+  state: string;
+  zipCode: string;
+}
+
+export interface ShippingAddress {
+  address: string;
+  addressId: number;
+  apartment: string;
+  city: string;
+  companyName: string;
+  country: string;
+  firstName: string;
+  label: string;
+  lastName: string;
+  phoneNumber: string;
+  state: string;
+  zipCode: string;
+}
+
+interface FileInfo {
+  id?: string;
+  fileName: string;
+  fileType: string;
+  fileUrl: string;
+  fileSize?: number;
+  title?: string;
+  hasDelete?: boolean;
+  isCustomer?: boolean;
+}
+
+interface AdditionalCalculatedPricesProps {
+  additionalCalculatedPrice: number;
+  additionalCalculatedPriceTax: number;
+}
+
+export type CalculatedValue = Record<
+  string,
+  string | number | Array<string | number> | Record<string, string | number>
+>;
+
+export type ContactInfoKeys = keyof ContactInfo;
+
+export interface QuoteItem {
+  node: {
+    basePrice: number;
+    id: string;
+    optionList: string;
+    primaryImage?: string;
+    productId?: number;
+    productName?: string;
+    quantity: number;
+    taxPrice: number;
+    variantId?: number;
+    variantSku?: string;
+    calculatedValue: CalculatedValue;
+    productsSearch: Product;
+    inventoryTracking?: 'none' | 'product' | 'variant';
+    inventoryLevel?: number;
+    additionalCalculatedPrices?:
+      | AdditionalCalculatedPricesProps
+      | AdditionalCalculatedPricesProps[];
+  };
+}
+
+export interface QuoteExtraFields {
+  id?: number;
+  fieldName: Maybe<string> | undefined;
+  value: string | number;
+}
+
+export interface QuoteInfo {
+  userId?: number;
+  contactInfo: ContactInfo;
+  shippingAddress: ShippingAddress;
+  billingAddress: BillingAddress;
+  fileInfo?: FileInfo[];
+  note?: string;
+  referenceNumber?: string;
+  extraFields?: QuoteExtraFields[];
+  recipients?: string[];
+}
+
+export interface QuoteInfoAndExtrafieldsItemProps {
+  info: {
+    quoteTitle: string;
+    referenceNumber: string;
+  };
+  extraFields: QuoteExtraFields[] | undefined;
+  recipients: string[];
+}
+
+interface FieldsOptionProps {
+  label: Maybe<string>;
+  value: Maybe<string>;
+}
+
+export interface QuoteFormattedItemsProps {
+  isExtraFields: boolean;
+  name: Maybe<string> | undefined;
+  label: Maybe<string> | undefined;
+  required?: boolean | null;
+  default: string | number;
+  fieldType: string;
+  xs: number;
+  variant: string;
+  size: string;
+  options?: FieldsOptionProps[];
+  max?: string | number | null;
+  rows?: string | number | null;
+  maxLength?: string | number | null;
+  id: number | string;
+}
+
+export type QuoteExtraFieldsOrigin = Omit<ExtraFieldsConfigType, 'fieldType'> &
+  QuoteExtraFieldsConfigType & {
+    fieldCategory: string;
+  };
+
+export interface QuoteExtraFieldsType {
+  quoteExtraFieldsConfig: QuoteExtraFieldsOrigin[];
+}
+
+export interface QuoteExtraFieldsData {
+  fieldName: string | undefined;
+  fieldValue: string | number;
+}
+
+export interface CreateQuoteResponse {
+  data: {
+    quoteCreate: {
+      quote: { id: number; createdAt: string; uuid?: string };
+    };
+  };
+}
