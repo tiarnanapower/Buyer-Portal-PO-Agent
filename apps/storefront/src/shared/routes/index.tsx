@@ -43,6 +43,7 @@ const ShoppingLists = lazy(() => import('@/pages/ShoppingLists'));
 const ShoppingListDetails = lazy(() => import('@/pages/ShoppingListDetails'));
 const UserManagement = lazy(() => import('@/pages/UserManagement'));
 const CompanyHierarchy = lazy(() => import('@/pages/CompanyHierarchy'));
+const PurchaseOrderAgentPage = lazy(() => import('@/pages/PurchaseOrderAgent'));
 
 const routesMap: Record<string, LazyExoticComponent<(props: PageProps) => ReactElement>> = {
   '/dashboard': Dashboard,
@@ -60,6 +61,7 @@ const routesMap: Record<string, LazyExoticComponent<(props: PageProps) => ReactE
   '/accountSettings': AccountSetting,
   '/quoteDetail/:id': QuoteDetail,
   '/company-hierarchy': CompanyHierarchy,
+  '/purchase-order-agent': PurchaseOrderAgentPage,
 };
 
 function addComponentToRoutes(routes: BuyerPortalRoute[]): RouteItem[] {

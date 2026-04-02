@@ -101,6 +101,15 @@ const legacyPermissions = {
     CustomerRole.CUSTOM_ROLE,
   ],
   quoteDetailPermissions: allLegacyPermission,
+  purchaseOrderAgentPermissions: [
+    CustomerRole.SUPER_ADMIN,
+    CustomerRole.SUPER_ADMIN_BEFORE_AGENCY,
+    CustomerRole.ADMIN,
+    CustomerRole.SENIOR_BUYER,
+    CustomerRole.JUNIOR_BUYER,
+    CustomerRole.CUSTOM_ROLE,
+    CustomerRole.B2C,
+  ],
 };
 
 const denyInvoiceRoles = [

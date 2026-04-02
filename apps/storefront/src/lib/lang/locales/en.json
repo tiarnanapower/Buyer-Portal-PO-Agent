@@ -74,6 +74,7 @@
   "global.navMenu.userManagement": "User management",
   "global.navMenu.accountSettings": "Account settings",
   "global.navMenu.companyHierarchy": "Company hierarchy",
+  "global.navMenu.purchaseOrderAgent": "AI PO agent",
   "global.B3MainHeader.superAdmin": "Super admin",
   "global.B3MainHeader.signIn": "Sign in",
   "global.B3MainHeader.home": "Home",

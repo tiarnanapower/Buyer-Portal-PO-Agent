@@ -49,6 +49,7 @@ const {
   accountSettingPermissions,
   companyHierarchyPermissions,
   quoteDetailPermissions,
+  purchaseOrderAgentPermissions,
 } = legacyPermissions;
 
 const {
@@ -235,6 +236,15 @@ export const routeList: (BuyerPortalRoute | RouteItem)[] = [
     permissionCodes: quoteDetailPermissionCodes,
     isTokenLogin: false,
     idLang: 'global.navMenu.quoteDetail',
+  },
+  {
+    path: '/purchase-order-agent',
+    name: 'AI PO agent',
+    wsKey: 'router-orders',
+    isMenuItem: true,
+    permissions: purchaseOrderAgentPermissions,
+    isTokenLogin: true,
+    idLang: 'global.navMenu.purchaseOrderAgent',
   },
 ];
 

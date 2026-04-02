@@ -7,7 +7,7 @@ import { defineConfig, loadEnv, UserConfig } from 'vite';
 import { ViteUserConfig } from 'vitest/config';
 
 export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'> => {
-  const env = loadEnv(mode, process.cwd());
+  const env = loadEnv(mode, process.cwd())  ;
   const isCI = process.env.CIRCLECI === 'true';
 
   return {
@@ -28,9 +28,19 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
       proxy: {
         '/bigcommerce': {
           target:
-            env?.VITE_PROXY_SHOPPING_URL || 'https://msfremote-frontend-demo.mybigcommerce.com/',
+            env?.VITE_PROXY_SHOPPING_URL || 'https://tiarnan-b2b-sandbox.mybigcommerce.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/bigcommerce/, ''),
+        },
+        '/bc-graphql': {
+          target: `https://store-${env.VITE_STORE_HASH}.mybigcommerce.com`,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/bc-graphql/, '/graphql'),
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.removeHeader('origin');
+            });
+          },
         },
       },
     },
