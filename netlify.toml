@@ -1,6 +1,15 @@
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/bc-graphql"
+  to = "/.netlify/functions/bc-graphql"
+  status = 200
+  force = true
+
 [[headers]]
   for = "/*"
   [headers.values]
     Access-Control-Allow-Origin = "https://tiarnan-b2b-sandbox.mybigcommerce.com"
-    Access-Control-Allow-Methods = "GET, OPTIONS"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
     Access-Control-Allow-Headers = "*"
