@@ -3,16 +3,12 @@ import legacy from '@vitejs/plugin-legacy';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { visualizer } from 'rollup-plugin-visualizer';
-import { appendFileSync } from 'fs';
 import { defineConfig, loadEnv, UserConfig } from 'vite';
 import { ViteUserConfig } from 'vitest/config';
 
 export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'> => {
   const env = loadEnv(mode, process.cwd())  ;
   const isCI = process.env.CIRCLECI === 'true';
-  // TEMPORARY DIAGNOSTIC: where proxied BC GraphQL traffic gets dumped.
-  const BC_GRAPHQL_LOG = process.env.BC_GRAPHQL_LOG ||
-    '/private/tmp/claude-502/-Users-tiarnan-power-Documents-Distributed-Ecommerce-Hub/f8d215cb-147b-4229-a549-b208cd09213e/scratchpad/bc-graphql-debug.log';
 
   return {
     plugins: [legacy({ targets: ['defaults'] }), react()],
@@ -41,50 +37,13 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/bc-graphql/, '/graphql'),
           configure: (proxy) => {
-            // TEMPORARY DIAGNOSTIC: dump every proxied BC GraphQL call so we can see
-            // exactly what the browser sends and what BigCommerce answers.
-            // Remove this `log` helper and the two listeners below once debugging is done.
-            const log = (obj: unknown) => {
-              try {
-                appendFileSync(BC_GRAPHQL_LOG, `${JSON.stringify(obj)}\n`);
-              } catch {
-                /* ignore logging failures */
-              }
-            };
-
-            proxy.on('proxyReq', (proxyReq, req) => {
+            proxy.on('proxyReq', (proxyReq) => {
               proxyReq.removeHeader('origin');
               // Strip the storefront shopper session cookie. If BigCommerce sees
               // SHOP_SESSION_TOKEN it scopes the request to that session and ignores
               // the storefront bearer token, making token-created carts/checkouts
               // invisible ("Checkout does not exist." / null redirectUrls).
               proxyReq.removeHeader('cookie');
-
-              const chunks: Buffer[] = [];
-              req.on('data', (c: Buffer) => chunks.push(c));
-              req.on('end', () => {
-                log({
-                  t: new Date().toISOString(),
-                  dir: 'req',
-                  incomingHeaders: req.headers,
-                  forwardedHeaders: proxyReq.getHeaders(),
-                  body: Buffer.concat(chunks).toString('utf8').slice(0, 2000),
-                });
-              });
-            });
-
-            proxy.on('proxyRes', (proxyRes, req) => {
-              const chunks: Buffer[] = [];
-              proxyRes.on('data', (c: Buffer) => chunks.push(c));
-              proxyRes.on('end', () => {
-                log({
-                  t: new Date().toISOString(),
-                  dir: 'res',
-                  url: req.url,
-                  status: proxyRes.statusCode,
-                  body: Buffer.concat(chunks).toString('utf8').slice(0, 2000),
-                });
-              });
             });
           },
         },
