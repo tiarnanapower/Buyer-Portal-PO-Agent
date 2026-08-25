@@ -28,7 +28,7 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
       proxy: {
         '/bigcommerce': {
           target:
-            env?.VITE_PROXY_SHOPPING_URL || 'https://flawless-demo.mybigcommerce.com/',
+            env?.VITE_PROXY_SHOPPING_URL || 'https://flawless-demo.mybigcommerce.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/bigcommerce/, ''),
         },
