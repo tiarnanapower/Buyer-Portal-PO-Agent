@@ -10,6 +10,6 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Access-Control-Allow-Origin = "https://flawless-demo.mybigcommerce.com/"
+    Access-Control-Allow-Origin = "https://flawless-demo.mybigcommerce.com"
     Access-Control-Allow-Methods = "GET, POST, OPTIONS"
     Access-Control-Allow-Headers = "*"
