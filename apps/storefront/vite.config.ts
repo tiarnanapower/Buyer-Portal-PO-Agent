@@ -39,6 +39,11 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq) => {
               proxyReq.removeHeader('origin');
+              // Strip the storefront shopper session cookie. If BigCommerce sees
+              // SHOP_SESSION_TOKEN it scopes the request to that session and ignores
+              // the storefront bearer token, making token-created carts/checkouts
+              // invisible ("Checkout does not exist." / null redirectUrls).
+              proxyReq.removeHeader('cookie');
             });
           },
         },
