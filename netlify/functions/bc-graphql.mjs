@@ -15,10 +15,16 @@ export const handler = async (event) => {
 
   const storeHash = process.env.VITE_STORE_HASH;
 
-  // Forward headers but strip origin/host so BigCommerce doesn't reject the JWT
+  // Forward only what BigCommerce needs. An allowlist rather than a blocklist:
+  //  - `origin`/`host` must go, or BigCommerce rejects the storefront JWT.
+  //  - `cookie` must go too. If BigCommerce sees a SHOP_SESSION_TOKEN it scopes the
+  //    request to that shopper session and ignores the bearer token, which makes
+  //    token-created carts and checkouts invisible ("Checkout does not exist.",
+  //    null redirectUrls). It also avoids relaying shopper cookies to a third party.
+  const FORWARDED_HEADERS = ['authorization', 'content-type', 'accept'];
   const forwardHeaders = Object.fromEntries(
-    Object.entries(event.headers).filter(
-      ([key]) => !['origin', 'host'].includes(key.toLowerCase()),
+    Object.entries(event.headers).filter(([key]) =>
+      FORWARDED_HEADERS.includes(key.toLowerCase()),
     ),
   );
 
