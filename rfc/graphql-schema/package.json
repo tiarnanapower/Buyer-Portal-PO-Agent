@@ -1,0 +1,20 @@
+{
+  "name": "graphql-schema",
+  "version": "1.0.0",
+  "description": "poc of unified schema",
+  "type": "module",
+  "scripts": {
+    "start": "npx mesh-compose -o supergraph.graphql && npx hive-gateway supergraph"
+  },
+  "devDependencies": {
+    "@graphql-hive/gateway": "^1.15.1",
+    "@graphql-mesh/compose-cli": "^1.4.11",
+    "@types/node": "^24.0.3",
+    "concurrently": "^9.2.0",
+    "dotenv": "^16.5.0",
+    "graphql": "^16.11.0",
+    "typescript": "^5.8.3"
+  },
+  "author": "",
+  "license": "ISC"
+}
