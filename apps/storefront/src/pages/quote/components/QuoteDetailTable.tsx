@@ -1,6 +1,8 @@
 import { forwardRef, Ref, useImperativeHandle, useRef, useState } from 'react';
-import { Box, styled, Typography } from '@mui/material';
+import { Box, FormControlLabel, styled, Switch, Typography } from '@mui/material';
 
+import BackorderMessage from '@/components/BackorderMessage';
+import PicklistBackorderMessages from '@/components/PicklistBackorderMessages';
 import { B3PaginationTable, GetRequestList } from '@/components/table/B3PaginationTable';
 import { TableColumnItem } from '@/components/table/B3Table';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
@@ -8,6 +10,16 @@ import { useB3Lang } from '@/lib/lang';
 import { useAppSelector } from '@/store';
 import { currencyFormatConvert } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice } from '@/utils/b3Product/b3Product';
+import {
+  getPicklistSelectionsFromStoredOptions,
+  type PicklistBackorderHistoryChild,
+} from '@/utils/catalogBackorderDisplay';
+
+import { useQuoteDetailBackorderState } from '../hooks/useQuoteDetailBackorderState';
+import {
+  getQuoteBackorderDisplayFields,
+  getRowPicklistBackorderHistory,
+} from '../utils/getQuoteBackorderDisplayFields';
 
 import QuoteDetailTableCard from './QuoteDetailTableCard';
 
@@ -31,6 +43,10 @@ interface ProductInfoProps {
   variantSku: string;
   productsSearch: CustomFieldItems;
   offeredPrice: number | string;
+  backorderMessage?: string;
+  totalOnHand?: number;
+  quantityBackordered?: number;
+  picklistBackorder?: PicklistBackorderHistoryChild[];
 }
 
 interface ListItemProps {
@@ -39,11 +55,13 @@ interface ListItemProps {
 
 interface ShoppingDetailTableProps {
   total: number;
+  productList: ProductInfoProps[];
   getQuoteTableDetails: GetRequestList<SearchProps, ProductInfoProps>;
   quoteReviewedBySalesRep: boolean;
-  getTaxRate: (taxClassId: number, variants: any) => number;
+  getTaxRate: (variants: any) => number;
   displayDiscount: boolean;
   currency: CurrencyProps;
+  status: string | number;
 }
 
 interface SearchProps {
@@ -81,7 +99,7 @@ const StyledQuoteTableContainer = styled('div')(() => ({
         verticalAlign: 'inherit',
       },
     },
-    '& tr: hover': {
+    '& tr:hover': {
       '& #shoppingList-actionList': {
         opacity: 1,
       },
@@ -99,12 +117,17 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
   const b3Lang = useB3Lang();
   const {
     total,
+    productList,
     getQuoteTableDetails,
     getTaxRate,
     quoteReviewedBySalesRep,
     displayDiscount,
     currency,
+    status,
   } = props;
+
+  const { isOrdered, backorderContextEnabled, picklistProductsById, hasBackorderedItems } =
+    useQuoteDetailBackorderState(productList, status);
 
   const isEnableProduct = useAppSelector(
     ({ global }) => global.blockPendingQuoteNonPurchasableOOS.isEnableProduct,
@@ -119,6 +142,8 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
     first: 12,
     offset: 0,
   });
+
+  const [showBackorderDetails, setShowBackorderDetails] = useState(false);
 
   useImperativeHandle(ref, () => ({
     getList: () => paginationTableRef.current?.getList(),
@@ -227,10 +252,10 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
         const {
           basePrice,
           offeredPrice,
-          productsSearch: { variants = [], taxClassId },
+          productsSearch: { variants = [] },
         } = row;
 
-        const taxRate = getTaxRate(taxClassId, variants);
+        const taxRate = getTaxRate(variants);
         const taxPrice = enteredInclusiveTax
           ? (Number(basePrice) * taxRate) / (1 + taxRate)
           : Number(basePrice) * taxRate;
@@ -288,18 +313,43 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
     {
       key: 'Qty',
       title: b3Lang('quoteDetail.table.qty'),
-      render: (row) => (
-        <Typography
-          sx={{
-            padding: '12px 0',
-          }}
-        >
-          {row.quantity}
-        </Typography>
-      ),
-      width: '15%',
+      render: (row) => {
+        const backorderFields = getQuoteBackorderDisplayFields(row, {
+          useOrderSnapshot: isOrdered,
+        });
+        const picklistSelections = backorderContextEnabled
+          ? getPicklistSelectionsFromStoredOptions(row)
+          : [];
+        const historyByProductId = isOrdered ? getRowPicklistBackorderHistory(row) : undefined;
+
+        return (
+          <Box>
+            <Typography sx={{ padding: '12px 0' }}>{row.quantity}</Typography>
+            {backorderContextEnabled && backorderFields && (
+              <BackorderMessage
+                totalOnHand={backorderFields.totalOnHand}
+                quantityBackordered={backorderFields.quantityBackordered}
+                backorderMessage={backorderFields.backorderMessage}
+                visible={showBackorderDetails}
+              />
+            )}
+            {picklistSelections.length > 0 && (
+              <PicklistBackorderMessages
+                selections={picklistSelections}
+                picklistProductsById={picklistProductsById}
+                qty={Number(row.quantity) || 0}
+                visible={showBackorderDetails}
+                backorderUiEnabled={backorderContextEnabled}
+                historyByProductId={historyByProductId}
+              />
+            )}
+          </Box>
+        );
+      },
+      width: '130px',
       style: {
-        textAlign: 'right',
+        textAlign: 'left',
+        minWidth: '130px',
       },
     },
     {
@@ -310,10 +360,10 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
           basePrice,
           quantity,
           offeredPrice,
-          productsSearch: { variants = [], taxClassId },
+          productsSearch: { variants = [] },
         } = row;
 
-        const taxRate = getTaxRate(taxClassId, variants);
+        const taxRate = getTaxRate(variants);
         const taxPrice = enteredInclusiveTax
           ? (Number(basePrice) * taxRate) / (1 + taxRate)
           : Number(basePrice) * taxRate;
@@ -389,6 +439,19 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
         >
           {b3Lang('quoteDetail.table.totalProducts', { total: total || 0 })}
         </Typography>
+        {backorderContextEnabled && hasBackorderedItems && (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={showBackorderDetails}
+                onChange={(e) => setShowBackorderDetails(e.target.checked)}
+              />
+            }
+            label={b3Lang('quoteDetail.table.backorderDetails')}
+            labelPlacement="start"
+            sx={{ mr: 0, gap: '0.5rem' }}
+          />
+        )}
       </Box>
       <B3PaginationTable
         ref={paginationTableRef}
@@ -412,6 +475,10 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
             currency={currency}
             displayDiscount={displayDiscount}
             getTaxRate={getTaxRate}
+            showBackorderDetails={showBackorderDetails}
+            picklistProductsById={picklistProductsById}
+            historyByProductId={isOrdered ? getRowPicklistBackorderHistory(row) : undefined}
+            useOrderSnapshot={isOrdered}
           />
         )}
       />

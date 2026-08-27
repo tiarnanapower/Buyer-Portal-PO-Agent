@@ -46,8 +46,8 @@ describe('b3logout utilities', () => {
       expect(isB2bTokenPage('/quoteDetail/123')).toBe(false);
     });
 
-    it('returns false for forgotpassword page URL', () => {
-      expect(isB2bTokenPage('/forgotpassword')).toBe(false);
+    it('returns false for forgotPassword page URL', () => {
+      expect(isB2bTokenPage('/forgotPassword')).toBe(false);
     });
 
     it('returns true for B2B token-required pages', () => {
@@ -116,10 +116,10 @@ describe('b3logout utilities', () => {
       expect(store.dispatch).toHaveBeenCalledWith(resetDraftQuoteInfo());
     });
 
-    it('dispatches all three actions', () => {
+    it('dispatches all four actions', () => {
       logoutSession();
 
-      expect(store.dispatch).toHaveBeenCalledTimes(3);
+      expect(store.dispatch).toHaveBeenCalledTimes(4);
     });
   });
 
@@ -153,8 +153,8 @@ describe('b3logout utilities', () => {
         expect(store.dispatch).not.toHaveBeenCalled();
       });
 
-      it('returns false for forgotpassword page and does not call logoutSession', async () => {
-        const result = await isUserGotoLogin('/forgotpassword');
+      it('returns false for forgotPassword page and does not call logoutSession', async () => {
+        const result = await isUserGotoLogin('/forgotPassword');
 
         expect(result).toBe(false);
         expect(store.dispatch).not.toHaveBeenCalled();

@@ -3,10 +3,11 @@ import { TextField } from '@mui/material';
 import { styled } from '@mui/material/styles';
 
 import { useMobile } from '@/hooks/useMobile';
+import { useB3Lang } from '@/lib/lang';
 
 const StyledNumberNoTopTextField = styled(TextField)(() => ({
   '& input': {
-    paddingRight: '6px',
+    paddingRight: '0.375rem',
   },
 }));
 
@@ -27,10 +28,11 @@ export function B3QuantityTextField({
   stock = 0,
   onChange = () => {},
 }: B3NumberTextFieldProps) {
+  const b3Lang = useB3Lang();
   const [isMobile] = useMobile();
 
   const sx = {
-    width: isMobile ? '110px' : '72px',
+    width: isMobile ? '6.875rem' : '100%',
     '& .MuiFormHelperText-root': {
       marginLeft: '0',
       marginRight: '0',
@@ -44,20 +46,20 @@ export function B3QuantityTextField({
       let validMessage = '';
 
       if (isStock === '1' && stock === 0) {
-        validMessage = 'Out of stock';
+        validMessage = b3Lang('shoppingList.quantityTextField.outOfStock');
       } else if (isStock === '1' && quantity > stock) {
-        validMessage = `${stock} in stock`;
+        validMessage = b3Lang('shoppingList.quantityTextField.available', { stock });
       } else if (minQuantity !== 0 && quantity < minQuantity) {
-        validMessage = `Min is ${minQuantity}`;
+        validMessage = b3Lang('shoppingList.quantityTextField.minQuantity', { minQuantity });
       } else if (maxQuantity !== 0 && quantity > maxQuantity) {
-        validMessage = `Max is ${maxQuantity}`;
+        validMessage = b3Lang('shoppingList.quantityTextField.maxQuantity', { maxQuantity });
       }
 
       setValidMessage(validMessage);
 
       return validMessage;
     },
-    [isStock, maxQuantity, minQuantity, stock],
+    [b3Lang, isStock, maxQuantity, minQuantity, stock],
   );
 
   const handleChange = (value: string) => {
@@ -80,7 +82,7 @@ export function B3QuantityTextField({
       type="number"
       variant="filled"
       hiddenLabel={!isMobile}
-      label={isMobile ? 'Qty' : ''}
+      label={isMobile ? b3Lang('shoppingList.table.quantity') : ''}
       value={value}
       error={!!validMessage}
       helperText={validMessage}

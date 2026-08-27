@@ -24,8 +24,9 @@ import { serialize } from '@/utils/b3Serialize';
 import { B3LStorage, B3SStorage } from '@/utils/b3Storage';
 import { globalSnackbar } from '@/utils/b3Tip';
 import { getActiveCurrencyInfo } from '@/utils/currencyUtils';
-import { FeatureFlags } from '@/utils/featureFlags';
 import { validateProducts } from '@/utils/validateProducts';
+
+import { getPdpSku } from './getPdpSku';
 
 interface DiscountsProps {
   discountedAmount: number;
@@ -234,7 +235,7 @@ const addProductFromProductPageToQuote = (
   isEnableProduct: boolean,
   b3Lang: LangFormatFunction,
   isBackorderEnabled: boolean,
-  featureFlags: FeatureFlags,
+  isSkuFromPdpWithTextContentEnabled: boolean,
 ) => {
   const addToQuote = async (node?: HTMLElement) => {
     try {
@@ -243,9 +244,10 @@ const addProductFromProductPageToQuote = (
       const productId = (productView.querySelector('input[name=product_id]') as CustomFieldItems)
         ?.value;
       const qty = (productView.querySelector('[name="qty[]"]') as CustomFieldItems)?.value ?? 1;
-      const sku = featureFlags['B2B-3474.get_sku_from_pdp_with_text_content']
-        ? (productView.querySelector('[data-product-sku]')?.textContent ?? '').trim()
-        : (productView.querySelector('[data-product-sku]')?.innerHTML ?? '').trim();
+      const sku = getPdpSku(
+        productView.querySelector('[data-product-sku]'),
+        isSkuFromPdpWithTextContentEnabled,
+      );
       const form = productView.querySelector('form[data-cart-item-add]') as HTMLFormElement;
 
       if (!sku) {
@@ -352,26 +354,29 @@ const addProductFromProductPageToQuote = (
         qty,
       });
 
-      const newProducts: CustomFieldItems = [quoteListitem];
-      const isSuccess = validProductQty(newProducts);
-      if (quoteListitem && isSuccess) {
-        await addQuoteDraftProduce(quoteListitem, qty, optionList || []);
-        globalSnackbar.success(b3Lang('global.notification.addProductSingular'), {
-          action: {
-            onClick: () => gotoQuoteDraft(setOpenPage),
-            label: b3Lang('quoteDraft.notification.openQuote'),
-          },
-        });
-      } else if (!isSuccess) {
+      if (!quoteListitem) {
+        globalSnackbar.error('Price error');
+        return;
+      }
+
+      const isSuccess = validProductQty([quoteListitem]);
+      if (!isSuccess) {
         globalSnackbar.error(b3Lang('global.notification.maximumPurchaseExceed'), {
           action: {
             onClick: () => gotoQuoteDraft(setOpenPage),
             label: b3Lang('quoteDraft.notification.openQuote'),
           },
         });
-      } else {
-        globalSnackbar.error('Price error');
+        return;
       }
+
+      await addQuoteDraftProduce(quoteListitem, qty, optionList || []);
+      globalSnackbar.success(b3Lang('global.notification.addProductSingular'), {
+        action: {
+          onClick: () => gotoQuoteDraft(setOpenPage),
+          label: b3Lang('quoteDraft.notification.openQuote'),
+        },
+      });
     } catch (e) {
       b2bLogger.error(e);
     } finally {
