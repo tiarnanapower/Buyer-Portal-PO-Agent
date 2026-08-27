@@ -10,6 +10,15 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
   const env = loadEnv(mode, process.cwd());
   const isCI = process.env.CIRCLECI === 'true';
 
+  /* Both dev proxies target the shopper's own store, resolved from VITE_STORE_HASH
+   * rather than a hardcoded one, so the same code serves any instance. A proxy is
+   * only registered once its target is known: without that guard the target becomes
+   * `store-undefined.mybigcommerce.com` and every proxied request fails opaquely. */
+  const storeUrl = env.VITE_STORE_HASH
+    ? `https://store-${env.VITE_STORE_HASH}.mybigcommerce.com`
+    : undefined;
+  const shoppingUrl = env.VITE_PROXY_SHOPPING_URL || storeUrl;
+
   return {
     plugins: [
       legacy({
@@ -33,26 +42,30 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
       port: 3001,
       cors: true,
       proxy: {
-        '/bigcommerce': {
-          target: env?.VITE_PROXY_SHOPPING_URL || 'https://flawless-demo.mybigcommerce.com',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/bigcommerce/, ''),
-        },
-        '/bc-graphql': {
-          target: `https://store-${env.VITE_STORE_HASH}.mybigcommerce.com`,
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/bc-graphql/, '/graphql'),
-          configure: (proxy) => {
-            proxy.on('proxyReq', (proxyReq) => {
-              proxyReq.removeHeader('origin');
-              // Strip the storefront shopper session cookie. If BigCommerce sees
-              // SHOP_SESSION_TOKEN it scopes the request to that session and ignores
-              // the storefront bearer token, making token-created carts/checkouts
-              // invisible ("Checkout does not exist." / null redirectUrls).
-              proxyReq.removeHeader('cookie');
-            });
+        ...(shoppingUrl && {
+          '/bigcommerce': {
+            target: shoppingUrl,
+            changeOrigin: true,
+            rewrite: (path: string) => path.replace(/^\/bigcommerce/, ''),
           },
-        },
+        }),
+        ...(storeUrl && {
+          '/bc-graphql': {
+            target: storeUrl,
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/bc-graphql/, '/graphql'),
+            configure: (proxy) => {
+              proxy.on('proxyReq', (proxyReq) => {
+                proxyReq.removeHeader('origin');
+                // Strip the storefront shopper session cookie. If BigCommerce sees
+                // SHOP_SESSION_TOKEN it scopes the request to that session and ignores
+                // the storefront bearer token, making token-created carts/checkouts
+                // invisible ("Checkout does not exist." / null redirectUrls).
+                proxyReq.removeHeader('cookie');
+              });
+            },
+          },
+        }),
       },
     },
     test: {

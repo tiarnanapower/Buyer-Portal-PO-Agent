@@ -7,9 +7,20 @@
   status = 200
   force = true
 
+# CORS for the portal's static bundle, so a storefront on another origin can load it.
+#
+# netlify.toml does not support environment-variable substitution, so this cannot be
+# driven from VITE_STORE_HASH the way the rest of the store config now is. These paths
+# serve only the public JS/CSS bundle -- no credentials, and `*` forbids credentialed
+# requests -- so a wildcard is store-agnostic without widening what is reachable:
+# the same files can already be fetched directly without CORS.
+#
+# To pin this to a single storefront for a given deployment, replace `*` with that
+# storefront's origin. Note it must then match the origin the bundle is loaded from,
+# or the browser will block it.
 [[headers]]
   for = "/*"
   [headers.values]
-    Access-Control-Allow-Origin = "https://flawless-demo.mybigcommerce.com"
+    Access-Control-Allow-Origin = "*"
     Access-Control-Allow-Methods = "GET, POST, OPTIONS"
     Access-Control-Allow-Headers = "*"
