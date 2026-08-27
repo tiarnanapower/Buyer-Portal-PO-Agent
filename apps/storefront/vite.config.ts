@@ -7,11 +7,18 @@ import { defineConfig, loadEnv, UserConfig } from 'vite';
 import { ViteUserConfig } from 'vitest/config';
 
 export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'> => {
-  const env = loadEnv(mode, process.cwd())  ;
+  const env = loadEnv(mode, process.cwd());
   const isCI = process.env.CIRCLECI === 'true';
 
   return {
-    plugins: [legacy({ targets: ['defaults'] }), react()],
+    plugins: [
+      legacy({
+        modernTargets: 'since 2022',
+        renderLegacyChunks: false,
+        modernPolyfills: true,
+      }),
+      react(),
+    ],
     experimental: {
       renderBuiltUrl(filename: string) {
         const isCustomBuyerPortal = env.VITE_ASSETS_ABSOLUTE_PATH !== undefined;
@@ -27,8 +34,7 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
       cors: true,
       proxy: {
         '/bigcommerce': {
-          target:
-            env?.VITE_PROXY_SHOPPING_URL || 'https://flawless-demo.mybigcommerce.com',
+          target: env?.VITE_PROXY_SHOPPING_URL || 'https://flawless-demo.mybigcommerce.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/bigcommerce/, ''),
         },
@@ -124,8 +130,16 @@ export default defineConfig(({ mode }): UserConfig & Pick<ViteUserConfig, 'test'
             eCache: ['@emotion/cache'],
           },
           chunkFileNames(chunk) {
-            if (chunk.name === 'index' && chunk.facadeModuleId) {
-              const folderName = path.basename(path.dirname(chunk.facadeModuleId));
+            const id = chunk.facadeModuleId;
+
+            if (id && /\/lib\/lang\/locales\/[^/]+\.json$/.test(id)) {
+              const base = path.basename(id, '.json');
+
+              return `chunks/locale-${base}.[hash].js`;
+            }
+
+            if (chunk.name === 'index' && id) {
+              const folderName = path.basename(path.dirname(id));
 
               return `chunks/${folderName}.[hash].js`;
             }

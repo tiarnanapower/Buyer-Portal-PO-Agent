@@ -1,13 +1,22 @@
 import { Delete, Edit } from '@mui/icons-material';
 import { Box, CardContent, styled, TextField, Typography } from '@mui/material';
 
+import BackorderMessage from '@/components/BackorderMessage';
+import PicklistBackorderMessages from '@/components/PicklistBackorderMessages';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
 import { useB3Lang } from '@/lib/lang';
+import { type ProductSearch } from '@/shared/service/b2b/graphql/product';
 import { Product } from '@/types';
 import { QuoteItem } from '@/types/quotes';
 import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice } from '@/utils/b3Product/b3Product';
 import { getProductOptionsFields } from '@/utils/b3Product/shared/config';
+import { type PicklistSelection } from '@/utils/catalogBackorderDisplay';
+
+import {
+  getDraftBackorderDisplayFields,
+  resolveDraftLineProductId,
+} from '../utils/getQuoteBackorderDisplayFields';
 
 interface QuoteTableCardProps {
   item: QuoteItem['node'];
@@ -15,6 +24,10 @@ interface QuoteTableCardProps {
   onDelete: (id: string) => void;
   handleUpdateProductQty: (item: QuoteItem['node'], quantity: number) => void;
   isLast: boolean;
+  draftQuoteBackorderContextEnabled: boolean;
+  showBackorderDetails?: boolean;
+  picklistProductsById?: Record<number, ProductSearch>;
+  picklistSelections?: PicklistSelection[];
 }
 
 const StyledImage = styled('img')(() => ({
@@ -29,6 +42,10 @@ function QuoteTableCard({
   onDelete,
   handleUpdateProductQty,
   isLast,
+  draftQuoteBackorderContextEnabled,
+  showBackorderDetails = false,
+  picklistProductsById = {},
+  picklistSelections = [],
 }: QuoteTableCardProps) {
   const {
     basePrice,
@@ -42,6 +59,13 @@ function QuoteTableCard({
   } = item;
 
   const b3Lang = useB3Lang();
+  const backorderFields = getDraftBackorderDisplayFields(
+    item,
+    picklistProductsById[resolveDraftLineProductId(item)],
+  );
+
+  const showBackorderMessage =
+    draftQuoteBackorderContextEnabled && Boolean(backorderFields) && showBackorderDetails;
 
   const price = getBCPrice(Number(basePrice), Number(taxPrice));
 
@@ -141,31 +165,52 @@ function QuoteTableCard({
 
           <Typography sx={{ fontSize: '14px' }}>Price: {singlePrice}</Typography>
 
-          <TextField
-            size="small"
-            type="number"
-            variant="filled"
-            label="qty"
-            inputProps={{
-              inputMode: 'numeric',
-              pattern: '[0-9]*',
-            }}
-            value={quantity}
-            sx={{
-              margin: '1rem 0',
-              width: '60%',
-              maxWidth: '100px',
-              '& label': {
-                fontSize: '14px',
-              },
-              '& input': {
-                fontSize: '14px',
-              },
-            }}
-            onChange={(e) => {
-              handleUpdateProductQty(item, Number(e.target.value));
-            }}
-          />
+          <>
+            <TextField
+              size="small"
+              type="number"
+              variant="filled"
+              label="qty"
+              inputProps={{
+                inputMode: 'numeric',
+                pattern: '[0-9]*',
+              }}
+              value={quantity}
+              sx={{
+                margin: '1rem 0',
+                width: '60%',
+                maxWidth: '100px',
+                '& label': {
+                  fontSize: '14px',
+                },
+                '& input': {
+                  fontSize: '14px',
+                },
+              }}
+              onChange={(e) => {
+                handleUpdateProductQty(item, Number(e.target.value));
+              }}
+            />
+            {showBackorderMessage && backorderFields && (
+              <Box sx={{ mt: 1.5 }}>
+                <BackorderMessage
+                  totalOnHand={backorderFields.totalOnHand}
+                  quantityBackordered={backorderFields.quantityBackordered}
+                  backorderMessage={backorderFields.backorderMessage}
+                  visible
+                />
+              </Box>
+            )}
+            {picklistSelections.length > 0 && (
+              <PicklistBackorderMessages
+                selections={picklistSelections}
+                picklistProductsById={picklistProductsById}
+                qty={Number(quantity) || 0}
+                visible={showBackorderDetails}
+                backorderUiEnabled={draftQuoteBackorderContextEnabled}
+              />
+            )}
+          </>
           <Typography sx={{ fontSize: '14px' }}>Total: {totalPrice}</Typography>
           <Box
             sx={{

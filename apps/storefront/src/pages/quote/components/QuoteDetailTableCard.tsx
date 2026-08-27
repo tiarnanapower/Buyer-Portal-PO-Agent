@@ -1,19 +1,34 @@
 import { Box, CardContent, styled, Typography } from '@mui/material';
 
+import BackorderMessage from '@/components/BackorderMessage';
+import PicklistBackorderMessages from '@/components/PicklistBackorderMessages';
 import { PRODUCT_DEFAULT_IMAGE } from '@/constants';
+import { useBackorderStorefrontMessaging } from '@/hooks/useBackorderStorefrontMessaging';
 import { useB3Lang } from '@/lib/lang';
+import { type ProductSearch } from '@/shared/service/b2b/graphql/product';
 import { useAppSelector } from '@/store';
+import { DisplayCurrency } from '@/types/currency';
 import { currencyFormatConvert } from '@/utils/b3CurrencyFormat';
 import { getBCPrice } from '@/utils/b3Product/b3Product';
+import {
+  getPicklistSelectionsFromStoredOptions,
+  type PicklistBackorderHistoryChild,
+} from '@/utils/catalogBackorderDisplay';
+
+import { getQuoteBackorderDisplayFields } from '../utils/getQuoteBackorderDisplayFields';
 
 interface QuoteTableCardProps {
   item: any;
   len: number;
-  getTaxRate: (taxClassId: number, variants: any) => number;
+  getTaxRate: (variants: any) => number;
   itemIndex?: number;
   showPrice: (price: string, row: CustomFieldItems) => string | number;
   displayDiscount: boolean;
-  currency: CurrencyProps;
+  currency: CurrencyProps | DisplayCurrency;
+  showBackorderDetails?: boolean;
+  picklistProductsById?: Record<number, ProductSearch>;
+  historyByProductId?: Record<number, PicklistBackorderHistoryChild>;
+  useOrderSnapshot?: boolean;
 }
 
 const StyledImage = styled('img')(() => ({
@@ -31,11 +46,17 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
     showPrice,
     currency,
     displayDiscount,
+    showBackorderDetails = false,
+    picklistProductsById = {},
+    historyByProductId,
+    useOrderSnapshot = false,
   } = props;
   const b3Lang = useB3Lang();
   const enteredInclusiveTax = useAppSelector(
     ({ storeConfigs }) => storeConfigs.currencies.enteredInclusiveTax,
   );
+  const { isBackorderMessagingContextEnabled, hasAnyBackorderDisplay } =
+    useBackorderStorefrontMessaging();
 
   const {
     basePrice,
@@ -46,10 +67,16 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
     sku,
     notes,
     offeredPrice,
-    productsSearch: { productUrl, variants = [], taxClassId },
+    productsSearch: { productUrl, variants = [] },
   } = quoteTableItem;
 
-  const taxRate = getTaxRate(taxClassId, variants);
+  const backorderFields = getQuoteBackorderDisplayFields(quoteTableItem, { useOrderSnapshot });
+  const backorderContextEnabled = isBackorderMessagingContextEnabled && hasAnyBackorderDisplay;
+  const picklistSelections = backorderContextEnabled
+    ? getPicklistSelectionsFromStoredOptions(quoteTableItem)
+    : [];
+
+  const taxRate = getTaxRate(variants);
   const taxPrice = enteredInclusiveTax
     ? (Number(basePrice) * taxRate) / (1 + taxRate)
     : Number(basePrice) * taxRate;
@@ -135,7 +162,24 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
           <Typography variant="body1" color="#616161">
             {notes}
           </Typography>
-
+          {isBackorderMessagingContextEnabled && hasAnyBackorderDisplay && backorderFields && (
+            <BackorderMessage
+              totalOnHand={backorderFields.totalOnHand}
+              quantityBackordered={backorderFields.quantityBackordered}
+              backorderMessage={backorderFields.backorderMessage}
+              visible={showBackorderDetails}
+            />
+          )}
+          {picklistSelections.length > 0 && (
+            <PicklistBackorderMessages
+              selections={picklistSelections}
+              picklistProductsById={picklistProductsById}
+              qty={Number(quantity) || 0}
+              visible={showBackorderDetails}
+              backorderUiEnabled={backorderContextEnabled}
+              historyByProductId={historyByProductId}
+            />
+          )}
           <Typography
             sx={{
               fontSize: '14px',
@@ -152,6 +196,7 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
                 {`${showPrice(
                   currencyFormatConvert(price, {
                     currency,
+                    useCurrentCurrency: true,
                   }),
                   quoteTableItem,
                 )}`}
@@ -166,6 +211,7 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
               {`${showPrice(
                 currencyFormatConvert(offeredPrice, {
                   currency,
+                  useCurrentCurrency: true,
                 }),
                 quoteTableItem,
               )}`}
@@ -180,7 +226,6 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
           >
             {b3Lang('quoteDetail.tableCard.qty', { quantity })}
           </Typography>
-
           <Typography
             sx={{
               fontSize: '14px',
@@ -197,6 +242,7 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
                 {`${showPrice(
                   currencyFormatConvert(total, {
                     currency,
+                    useCurrentCurrency: true,
                   }),
                   quoteTableItem,
                 )}`}
@@ -211,6 +257,7 @@ function QuoteDetailTableCard(props: QuoteTableCardProps) {
               {`${showPrice(
                 currencyFormatConvert(totalWithDiscount, {
                   currency,
+                  useCurrentCurrency: true,
                 }),
                 quoteTableItem,
               )}`}
