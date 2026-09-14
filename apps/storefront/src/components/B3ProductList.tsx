@@ -17,6 +17,7 @@ import {
   productRequiresChooseOptionsBeforeAdd,
 } from '@/utils/catalogBackorderDisplay';
 import { getProductListColumnAlignments } from '@/utils/getProductListColumnAlignments';
+import { resolveProductUrl } from '@/utils/productUrl';
 
 import { MoneyFormat, ProductItem } from '../types';
 
@@ -539,12 +540,9 @@ export function B3ProductList<T extends ProductItem>(props: ProductProps<T>) {
                   color="#212121"
                   onClick={() => {
                     if (canToProduct) {
-                      const {
-                        location: { origin },
-                      } = window;
+                      const href = resolveProductUrl(product?.productUrl);
 
-                      if (product?.productUrl)
-                        window.location.href = `${origin}${product?.productUrl}`;
+                      if (href) window.location.href = href;
                     }
                   }}
                   sx={{

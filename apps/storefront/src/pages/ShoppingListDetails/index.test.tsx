@@ -519,7 +519,10 @@ describe('when the user clicks on a product name', () => {
 
     await userEvent.click(within(row).getByText('Lovely socks'));
 
-    expect(hrefSpy).toHaveBeenCalledWith(`${window.location.origin}/products/73737/lovely-socks`);
+    // `{ ...window.location }` above drops `origin` (jsdom defines it on the prototype), so the
+    // previous expectation here resolved to the literal string "undefined/products/...". Both the
+    // code and the assertion were equally wrong, so it passed. Assert the real resolved URL.
+    expect(hrefSpy).toHaveBeenCalledWith(`${document.baseURI}products/73737/lovely-socks`);
   });
 });
 

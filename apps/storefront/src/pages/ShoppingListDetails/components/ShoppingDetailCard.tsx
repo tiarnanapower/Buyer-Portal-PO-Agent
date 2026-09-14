@@ -14,6 +14,7 @@ import {
   getCatalogProductRowDisplayState,
   getPicklistSelectionsFromStoredOptions,
 } from '@/utils/catalogBackorderDisplay';
+import { resolveProductUrl } from '@/utils/productUrl';
 
 import { getProductOptionsFields } from '../../../utils/b3Product/shared/config';
 
@@ -151,11 +152,11 @@ function ShoppingDetailCard(props: ShoppingDetailCardProps) {
             variant="body1"
             color="#212121"
             onClick={() => {
-              const {
-                location: { origin },
-              } = window;
+              const href = resolveProductUrl(productUrl);
 
-              window.location.href = `${origin}${productUrl}`;
+              if (href) {
+                window.location.href = href;
+              }
             }}
             sx={{
               cursor: 'pointer',

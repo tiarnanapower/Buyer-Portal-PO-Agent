@@ -14,6 +14,7 @@ import {
   getPicklistSelectionsFromStoredOptions,
   type PicklistBackorderHistoryChild,
 } from '@/utils/catalogBackorderDisplay';
+import { resolveProductUrl } from '@/utils/productUrl';
 
 import { useQuoteDetailBackorderState } from '../hooks/useQuoteDetailBackorderState';
 import {
@@ -191,11 +192,10 @@ function QuoteDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>) {
                 variant="body1"
                 color="#212121"
                 onClick={() => {
-                  const {
-                    location: { origin },
-                  } = window;
-                  if (productUrl) {
-                    window.location.href = `${origin}${productUrl}`;
+                  const href = resolveProductUrl(productUrl);
+
+                  if (href) {
+                    window.location.href = href;
                   }
                 }}
                 sx={{

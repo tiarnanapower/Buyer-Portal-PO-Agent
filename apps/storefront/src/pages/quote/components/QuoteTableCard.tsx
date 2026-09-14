@@ -12,6 +12,7 @@ import { currencyFormat } from '@/utils/b3CurrencyFormat';
 import { getBCPrice, getDisplayPrice } from '@/utils/b3Product/b3Product';
 import { getProductOptionsFields } from '@/utils/b3Product/shared/config';
 import { type PicklistSelection } from '@/utils/catalogBackorderDisplay';
+import { resolveProductUrl } from '@/utils/productUrl';
 
 import {
   getDraftBackorderDisplayFields,
@@ -127,8 +128,10 @@ function QuoteTableCard({
             variant="body1"
             color="#212121"
             onClick={() => {
-              if (productUrl) {
-                window.location.href = `${window.location.origin}${productUrl}`;
+              const href = resolveProductUrl(productUrl);
+
+              if (href) {
+                window.location.href = href;
               }
             }}
             sx={{

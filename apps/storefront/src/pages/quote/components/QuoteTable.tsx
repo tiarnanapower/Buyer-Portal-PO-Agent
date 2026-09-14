@@ -23,6 +23,7 @@ import {
 } from '@/utils/b3Product/b3Product';
 import { getProductOptionsFields } from '@/utils/b3Product/shared/config';
 import { snackbar } from '@/utils/b3Tip';
+import { resolveProductUrl } from '@/utils/productUrl';
 
 import ChooseOptionsDialog from '../../ShoppingListDetails/components/ChooseOptionsDialog';
 import { useDraftQuoteBackorderState } from '../hooks/useDraftQuoteBackorderState';
@@ -342,8 +343,10 @@ function QuoteTable({ total, items, updateSummary }: QuoteTableProps) {
                 variant="body1"
                 color="#212121"
                 onClick={() => {
-                  if (productUrl) {
-                    window.location.href = `${window.location.origin}${productUrl}`;
+                  const href = resolveProductUrl(productUrl);
+
+                  if (href) {
+                    window.location.href = href;
                   }
                 }}
                 sx={{

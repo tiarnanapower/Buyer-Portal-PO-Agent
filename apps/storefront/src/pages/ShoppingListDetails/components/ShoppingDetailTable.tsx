@@ -45,6 +45,7 @@ import {
   getCatalogProductRowDisplayState,
   getPicklistSelectionsFromStoredOptions,
 } from '@/utils/catalogBackorderDisplay';
+import { resolveProductUrl } from '@/utils/productUrl';
 
 import B3FilterSearch from '../../../components/filter/B3FilterSearch';
 
@@ -611,11 +612,11 @@ function ShoppingDetailTable(props: ShoppingDetailTableProps, ref: Ref<unknown>)
                 variant="body1"
                 color="#212121"
                 onClick={() => {
-                  const {
-                    location: { origin },
-                  } = window;
+                  const href = resolveProductUrl(row.productUrl);
 
-                  window.location.href = `${origin}${row.productUrl}`;
+                  if (href) {
+                    window.location.href = href;
+                  }
                 }}
                 sx={{
                   cursor: 'pointer',
