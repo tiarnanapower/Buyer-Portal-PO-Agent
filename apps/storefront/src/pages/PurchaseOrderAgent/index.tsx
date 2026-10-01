@@ -4,36 +4,46 @@ import { Box, CircularProgress } from '@mui/material';
 import { PurchaseOrderAgent } from '@takeshape/purchase-order-chat';
 
 import { useAppSelector } from '@/store';
-import { BigCommerceStorefrontAPIBaseURL, channelId, platform } from '@/utils/basicConfig';
+import {
+  BigCommerceStorefrontAPIBaseURL,
+  channelId,
+  isBigCommercePlatform,
+} from '@/utils/basicConfig';
 
 /**
  * The agent creates carts and drives checkout through the BigCommerce GraphQL
  * Storefront API, so it has to run in the same context as the signed-in buyer.
  *
- * On a BigCommerce storefront that means using the storefront token the buyer
- * portal already mints for this session (`company.tokens.bcGraphqlToken`, issued
- * with the page origin in `allowed_cors_origins`) and talking to the store's own
- * same-origin `/graphql`. The shopper session cookie then rides along and the cart
- * belongs to the signed-in customer.
+ * On a Stencil storefront that works: the portal mints a storefront token for the
+ * session (`company.tokens.bcGraphqlToken`, issued with the page origin in
+ * `allowed_cors_origins`) and talks to the store's own same-origin `/graphql`. The
+ * shopper session cookie rides along and the cart belongs to the signed-in customer.
  *
- * Routing this through a proxy with a static, anonymous token instead produces a
- * guest cart (`customer_id: null`). BigCommerce cannot hand a guest cart to a
- * signed-in session, so checkout lands on an empty cart. The env vars below are
- * kept only as a fallback for non-BigCommerce/headless hosting, where there is no
- * shopper session to inherit.
+ * Off Stencil there is no such token: `getBCGraphqlToken` early-returns `undefined`
+ * unless `isBigCommercePlatform()`, so `bcGraphqlToken` is never populated. The only
+ * credential available is the static `VITE_STOREFRONT_TOKEN`, which is anonymous, so
+ * carts it creates have `customer_id: null`. BigCommerce cannot hand a guest cart to
+ * a signed-in session, which is why checkout lands on an empty cart. Binding the cart
+ * to the buyer needs a customer-impersonation token held server-side (see
+ * `netlify/functions/bc-graphql.mjs`); it must never be shipped to the browser.
+ *
+ * Whichever branch is taken, the endpoint must be the buyer's own channel. Products
+ * are assigned per channel, so querying the default channel returns no matches rather
+ * than an error -- the agent reports "found 0 products" for a catalogue that is fine.
+ * `BigCommerceStorefrontAPIBaseURL` is already channel-aware; the env override must be
+ * too (the Netlify proxy derives it from `VITE_CHANNEL_ID`).
  */
 function PurchaseOrderAgentPage() {
   const bcGraphqlToken = useAppSelector(({ company }) => company.tokens.bcGraphqlToken);
   const b2bToken = useAppSelector(({ company }) => company.tokens.B2BToken);
 
-  const isOnBigCommerceStorefront = platform === 'bigcommerce';
+  const isOnBigCommerceStorefront = isBigCommercePlatform();
   const storefrontToken = isOnBigCommerceStorefront
     ? bcGraphqlToken
     : import.meta.env.VITE_STOREFRONT_TOKEN || '';
   const endpoint = isOnBigCommerceStorefront
     ? `${BigCommerceStorefrontAPIBaseURL}/graphql`
-    : import.meta.env.VITE_BC_GRAPHQL_ENDPOINT ||
-      `https://store-${import.meta.env.VITE_STORE_HASH}.mybigcommerce.com/graphql`;
+    : import.meta.env.VITE_BC_GRAPHQL_ENDPOINT || `${BigCommerceStorefrontAPIBaseURL}/graphql`;
 
   return (
     <Box
