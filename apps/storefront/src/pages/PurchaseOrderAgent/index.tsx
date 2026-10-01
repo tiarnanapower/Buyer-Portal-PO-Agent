@@ -70,7 +70,13 @@ function PurchaseOrderAgentPage() {
             getB2BJwt: async () => b2bToken || null,
           }}
           productPath="/product/:sku"
-          checkoutUrl={import.meta.env.VITE_CHECKOUT_URL || ''}
+          // Deliberately left unset unless overridden. The widget hands `onCheckout`
+          // a single-use URL from `createCartRedirectUrls` which transfers the cart
+          // into a browser session; the wrapper resolves `checkoutUrl || thatUrl`, so
+          // any value here discards it. Navigating to a bare `/checkout` instead
+          // arrives with no cart, and BigCommerce redirects to
+          // `/checkout/order-confirmation`. Only set this to bypass the cart handoff.
+          checkoutUrl={import.meta.env.VITE_CHECKOUT_URL || undefined}
         />
       ) : (
         // `bcGraphqlToken` is fetched during app bootstrap; building the client
