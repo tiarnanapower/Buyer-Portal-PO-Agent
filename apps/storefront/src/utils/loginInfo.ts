@@ -32,6 +32,7 @@ import {
 } from '@/store/slices/company';
 import { resetDraftQuoteInfo, resetDraftQuoteList } from '@/store/slices/quoteInfo';
 import { CompanyStatus, CustomerRole, CustomerRoleName, LoginTypes, UserTypes } from '@/types';
+import { CompanyError } from '@/utils/companyUtils';
 
 import b2bLogger from './b3Logger';
 import { B3LStorage, B3SStorage } from './b3Storage';
@@ -220,12 +221,28 @@ const loginWithCurrentCustomerJWT = async () => {
     store.getState().global.featureFlags['PROJECT-7920.use_bc_login_and_authorisation'] ?? false;
 
   const data = await getB2BToken(currentCustomerJWT, channelId, !useBcLoginAndAuthorisation).catch(
-    (error) => {
-      // eslint-disable-next-line no-console
-      console.error('Failed to get B2B token:', error);
-      throw error;
+    (error: unknown) => {
+      /*
+       * A CompanyError is a real account state -- pending approval, prelaunch, blocked -- and the
+       * UI must show it, so it keeps propagating.
+       *
+       * Anything else is transient. Re-throwing those propagated a backend blip up to App.tsx,
+       * which routes to /login, where CatalystLogin read the missing token as an intentional
+       * logout and dispatched `on-logout`: the storefront destroyed the session, bounced back,
+       * the portal reloaded into the same failure. That is the sign-out loop. Returning undefined
+       * leaves the caller to treat it as "no token this time".
+       */
+      if (error instanceof CompanyError) {
+        throw error;
+      }
+
+      b2bLogger.error('Failed to get B2B token:', error);
+
+      return undefined;
     },
   );
+
+  if (!data) return undefined;
 
   const B2BToken = data.authorization.result.token as string;
 
@@ -261,10 +278,16 @@ export const getCurrentCustomerInfo = async (
   let loginType = LoginTypes.GENERAL_LOGIN;
 
   if (!b2bToken && !B2BToken) {
-    const data = await loginWithCurrentCustomerJWT().catch((error) => {
-      // eslint-disable-next-line no-console
-      console.error('Failed to login with current customer JWT:', error);
-      throw error;
+    const data = await loginWithCurrentCustomerJWT().catch((error: unknown) => {
+      // As above: a CompanyError must reach the UI; anything else is transient, and the
+      // `if (!data)` below already handles the absent case.
+      if (error instanceof CompanyError) {
+        throw error;
+      }
+
+      b2bLogger.error('Failed to login with current customer JWT:', error);
+
+      return undefined;
     });
     if (!data) return undefined;
     /*
