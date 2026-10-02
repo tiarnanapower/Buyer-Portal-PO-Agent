@@ -4,6 +4,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Expose-Headers': 'X-Po-Auth-Mode',
 };
 
 const B2B_GRAPHQL_URL = 'https://api-b2b.bigcommerce.com/graphql';
@@ -46,10 +47,7 @@ const isBigCommerceStorefrontToken = (claims) =>
 const resolveCustomerId = async (b2bToken) => {
   const response = await fetch(B2B_GRAPHQL_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${b2bToken}`,
-    },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${b2bToken}` },
     body: JSON.stringify({ query: '{ currentUser { bcId } }' }),
   });
 
@@ -70,18 +68,33 @@ const resolveCustomerId = async (b2bToken) => {
 const IDENTITY_TTL_MS = 60_000;
 const identityCache = new Map();
 
-const cachedCustomerId = async (b2bToken) => {
-  const key = createHash('sha256').update(b2bToken).digest('hex');
+const identityKey = (token) => createHash('sha256').update(token).digest('hex');
+
+const lookUpIdentity = async (b2bToken) => {
+  const key = identityKey(b2bToken);
   const hit = identityCache.get(key);
 
-  if (hit && hit.expiresAt > Date.now()) return hit.bcId;
+  if (hit && hit.expiresAt > Date.now()) return hit;
 
-  const bcId = await resolveCustomerId(b2bToken);
+  const entry = { bcId: await resolveCustomerId(b2bToken), rejected: false };
+  entry.expiresAt = Date.now() + IDENTITY_TTL_MS;
+  identityCache.set(key, entry);
 
-  identityCache.set(key, { bcId, expiresAt: Date.now() + IDENTITY_TTL_MS });
-
-  return bcId;
+  return entry;
 };
+
+/**
+ * A `bcId` that B2B Edition recognises is not automatically one the storefront
+ * will accept -- the customer may not exist on this channel. BigCommerce rejects
+ * the whole request when that happens rather than degrading, so every query in
+ * the conversation fails and the agent reports "0 products found" and "failed to
+ * add to cart" for a catalogue and cart that are both fine.
+ *
+ * Detect that specific rejection so the request can be retried as a guest.
+ */
+const isCustomerRejection = (status, body) =>
+  status === 403 ||
+  /Failed retrieving customer|Invalid customer ID|X-Bc-Customer-Id/i.test(body);
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -107,8 +120,8 @@ export const handler = async (event) => {
   //    request to that shopper session and ignores the bearer token, which makes
   //    token-created carts and checkouts invisible ("Checkout does not exist.",
   //    null redirectUrls). It also avoids relaying shopper cookies to a third party.
-  const FORWARDED_HEADERS = ['authorization', 'content-type', 'accept'];
-  const forwardHeaders = Object.fromEntries(
+  const FORWARDED_HEADERS = ['content-type', 'accept'];
+  const baseHeaders = Object.fromEntries(
     Object.entries(event.headers).filter(([key]) =>
       FORWARDED_HEADERS.includes(key.toLowerCase()),
     ),
@@ -118,35 +131,51 @@ export const handler = async (event) => {
     .find(([key]) => key.toLowerCase() === 'authorization')?.[1]
     ?.replace(/^Bearer\s+/i, '');
 
-  // A B2B token identifies the buyer but cannot talk to the Storefront API. Swap
-  // it for the impersonation token and tell BigCommerce who the cart belongs to;
-  // without this the cart is created with `customer_id: null` and checkout hands
-  // the buyer a guest cart with no company pricing or saved addresses.
-  if (bearer && !isBigCommerceStorefrontToken(decodeJwtPayload(bearer))) {
-    const bcId = impersonationToken ? await cachedCustomerId(bearer) : null;
+  const url = `${storefrontOrigin(storeHash, channelId)}/graphql`;
+  const call = async (headers) => {
+    const response = await fetch(url, { method: 'POST', headers, body: event.body });
+    return { status: response.status, body: await response.text() };
+  };
 
-    if (bcId) {
-      forwardHeaders.authorization = `Bearer ${impersonationToken}`;
-      forwardHeaders['x-bc-customer-id'] = String(bcId);
-    } else if (anonymousToken) {
-      // Not signed in, token rejected, or impersonation not configured. Fall back
-      // to anonymous rather than failing: the agent still works, as a guest.
-      forwardHeaders.authorization = `Bearer ${anonymousToken}`;
-      delete forwardHeaders['x-bc-customer-id'];
+  const asGuest = () =>
+    call({ ...baseHeaders, authorization: `Bearer ${anonymousToken ?? bearer ?? ''}` });
+
+  let mode = 'passthrough';
+  let result;
+
+  const claims = bearer ? decodeJwtPayload(bearer) : null;
+  const identity =
+    bearer && impersonationToken && !isBigCommerceStorefrontToken(claims)
+      ? await lookUpIdentity(bearer)
+      : null;
+
+  if (identity?.bcId && !identity.rejected) {
+    mode = 'impersonated';
+    result = await call({
+      ...baseHeaders,
+      authorization: `Bearer ${impersonationToken}`,
+      'x-bc-customer-id': String(identity.bcId),
+    });
+
+    // The buyer is real to B2B Edition but not to this storefront channel. Serve
+    // them as a guest rather than failing the whole conversation, and remember so
+    // the rest of the session skips straight past impersonation.
+    if (isCustomerRejection(result.status, result.body)) {
+      identity.rejected = true;
+      mode = 'impersonation-rejected';
+      result = await asGuest();
     }
+  } else if (bearer && !isBigCommerceStorefrontToken(claims)) {
+    // A B2B token cannot talk to the Storefront API on its own.
+    mode = identity ? 'identity-unresolved' : 'impersonation-not-configured';
+    result = await asGuest();
+  } else {
+    result = await call({ ...baseHeaders, authorization: `Bearer ${bearer ?? ''}` });
   }
 
-  const response = await fetch(`${storefrontOrigin(storeHash, channelId)}/graphql`, {
-    method: 'POST',
-    headers: forwardHeaders,
-    body: event.body,
-  });
-
-  const data = await response.text();
-
   return {
-    statusCode: response.status,
-    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    body: data,
+    statusCode: result.status,
+    headers: { 'Content-Type': 'application/json', 'X-Po-Auth-Mode': mode, ...CORS_HEADERS },
+    body: result.body,
   };
 };
