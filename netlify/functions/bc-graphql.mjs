@@ -15,6 +15,28 @@ const storefrontOrigin = (storeHash, channelId) =>
     ? `https://store-${storeHash}.mybigcommerce.com`
     : `https://store-${storeHash}-${Number(channelId)}.mybigcommerce.com`;
 
+const decodeJwtPayload = (token) => {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+};
+
+// Only BigCommerce's own storefront tokens mean anything to the Storefront API:
+// they are issued by `BC` and list the channels they cover in `cid`. Anything
+// else -- most likely a B2B token from a browser still running an older bundle --
+// is rejected outright with "JWT has Json of an unknown format", which fails every
+// query in the conversation and surfaces as "0 products" and "failed to add to
+// cart". Substitute the configured storefront token so the proxy works with any
+// bundle rather than only the one deployed alongside it.
+const isBigCommerceStorefrontToken = (token) => {
+  const claims = decodeJwtPayload(token);
+  return claims?.iss === 'BC' && Array.isArray(claims?.cid);
+};
+
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers: CORS_HEADERS, body: '' };
@@ -39,6 +61,15 @@ export const handler = async (event) => {
       FORWARDED_HEADERS.includes(key.toLowerCase()),
     ),
   );
+
+  const bearer = Object.entries(event.headers)
+    .find(([key]) => key.toLowerCase() === 'authorization')?.[1]
+    ?.replace(/^Bearer\s+/i, '');
+
+  if (process.env.VITE_STOREFRONT_TOKEN && (!bearer || !isBigCommerceStorefrontToken(bearer))) {
+    delete forwardHeaders.Authorization;
+    forwardHeaders.authorization = `Bearer ${process.env.VITE_STOREFRONT_TOKEN}`;
+  }
 
   const response = await fetch(`${storefrontOrigin(storeHash, channelId)}/graphql`, {
     method: 'POST',
